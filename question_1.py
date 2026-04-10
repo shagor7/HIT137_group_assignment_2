@@ -1,11 +1,8 @@
 import os
-
-# --------------------------------------------------
 # Function: ensure_raw_file
 # Purpose : Check whether raw_text.txt exists.
 #           If it does not exist, create it and stop
 #           the program so the user can add content.
-# --------------------------------------------------
 def ensure_raw_file():
     if not os.path.exists("raw_text.txt"):
         with open("raw_text.txt", "w", encoding="utf-8") as file:
@@ -14,24 +11,16 @@ def ensure_raw_file():
         print("A new raw_text.txt file has been created.")
         print("Please add text inside it and run the program again.")
         exit()
-
-
-# --------------------------------------------------
 # Function: shift_in_group
 # Purpose : Shift a character inside a fixed group
 #           of 13 letters only.
 #           Example groups: a-m, n-z, A-M, N-Z
-# --------------------------------------------------
 def shift_in_group(char, start_char, shift):
     group_size = 13
     return chr((ord(char) - ord(start_char) + shift) % group_size + ord(start_char))
-
-
-# --------------------------------------------------
 # Function: encrypt_char
 # Purpose : Encrypt one character according to the
 #           given rules in the question.
-# --------------------------------------------------
 def encrypt_char(char, shift1, shift2):
     # Lowercase first half: a-m
     if 'a' <= char <= 'm':
@@ -52,13 +41,9 @@ def encrypt_char(char, shift1, shift2):
     # Other characters remain unchanged
     else:
         return char
-
-
-# --------------------------------------------------
 # Function: decrypt_char
 # Purpose : Reverse the encryption rules for one
 #           character.
-# --------------------------------------------------
 def decrypt_char(char, shift1, shift2):
     # Lowercase first half: a-m
     if 'a' <= char <= 'm':
@@ -79,13 +64,9 @@ def decrypt_char(char, shift1, shift2):
     # Other characters remain unchanged
     else:
         return char
-
-
-# --------------------------------------------------
 # Function: encrypt_file
 # Purpose : Read raw_text.txt, encrypt its content,
 #           and write the result to encrypted_text.txt
-# --------------------------------------------------
 def encrypt_file(shift1, shift2):
     with open("raw_text.txt", "r", encoding="utf-8") as file:
         original_text = file.read()
@@ -99,14 +80,10 @@ def encrypt_file(shift1, shift2):
         file.write(encrypted_text)
 
     print("Encryption completed successfully.")
-
-
-# --------------------------------------------------
 # Function: decrypt_file
 # Purpose : Read encrypted_text.txt, decrypt its
 #           content, and write the result to
 #           decrypted_text.txt
-# --------------------------------------------------
 def decrypt_file(shift1, shift2):
     with open("encrypted_text.txt", "r", encoding="utf-8") as file:
         encrypted_text = file.read()
@@ -121,12 +98,10 @@ def decrypt_file(shift1, shift2):
 
     print("Decryption completed successfully.")
 
-
-# --------------------------------------------------
 # Function: verify_decryption
 # Purpose : Compare raw_text.txt and decrypted_text.txt
 #           to check whether decryption was successful.
-# --------------------------------------------------
+
 def verify_decryption():
     with open("raw_text.txt", "r", encoding="utf-8") as file1:
         original_text = file1.read()
@@ -139,8 +114,6 @@ def verify_decryption():
     else:
         print("Verification failed: decryption does not match the original text.")
 
-
-# --------------------------------------------------
 # Function: main
 # Purpose : Control the whole program.
 #           1. Check input file
@@ -148,7 +121,7 @@ def verify_decryption():
 #           3. Encrypt file
 #           4. Decrypt file
 #           5. Verify result
-# --------------------------------------------------
+
 def main():
     ensure_raw_file()
 

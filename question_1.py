@@ -1,16 +1,47 @@
 import os
+
 # Function: ensure_raw_file
 # Purpose : Check whether raw_text.txt exists.
-#           If it does not exist, create it and stop
-#           the program so the user can add content.
+#           If it exists, ask the user whether to update it.
+#           If it does not exist, create it using user input.
+
 def ensure_raw_file():
-    if not os.path.exists("raw_text.txt"):
+    if os.path.exists("raw_text.txt"):
+        while True:
+            choice = input("raw_text.txt exists. Do you want to update it? (y/n): ").strip().lower()
+            if choice == 'y':
+                while True:
+                    user_text = input("Enter text to encrypt: ").strip()
+                    if user_text == "":
+                        print("Text cannot be empty. Please enter some text.")
+                    else:
+                        break
+                    
+                with open("raw_text.txt", "w", encoding="utf-8") as file:
+                    file.write(user_text)
+
+                print("raw_text.txt updated.")
+                break
+
+            elif choice == 'n':
+                print("Using existing raw_text.txt.")
+                break
+
+            else:
+                print("Invalid input. Please enter y or n.")
+
+    else:
+        print("raw_text.txt does not exist.")
+
+        while True:
+            user_text = input("Enter text to create raw_text.txt: ").strip()
+            if user_text == "":
+                print("Text cannot be empty. Please enter some text.")
+            else:
+                break
         with open("raw_text.txt", "w", encoding="utf-8") as file:
-            file.write("Please write some text here and run the program again.")
-        print("raw_text.txt was not found.")
-        print("A new raw_text.txt file has been created.")
-        print("Please add text inside it and run the program again.")
-        exit()
+            file.write(user_text)
+        print("raw_text.txt created.")
 # Function: shift_in_group
 # Purpose : Shift a character inside a fixed group
 #           of 13 letters only.
@@ -71,10 +102,7 @@ def encrypt_file(shift1, shift2):
     with open("raw_text.txt", "r", encoding="utf-8") as file:
         original_text = file.read()
 
-    encrypted_text = ""
-
-    for char in original_text:
-        encrypted_text += encrypt_char(char, shift1, shift2)
+    encrypted_text = "".join(encrypt_char(char, shift1, shift2) for char in original_text)
 
     with open("encrypted_text.txt", "w", encoding="utf-8") as file:
         file.write(encrypted_text)
@@ -88,10 +116,7 @@ def decrypt_file(shift1, shift2):
     with open("encrypted_text.txt", "r", encoding="utf-8") as file:
         encrypted_text = file.read()
 
-    decrypted_text = ""
-
-    for char in encrypted_text:
-        decrypted_text += decrypt_char(char, shift1, shift2)
+    decrypted_text = "".join(decrypt_char(char, shift1, shift2) for char in encrypted_text)
 
     with open("decrypted_text.txt", "w", encoding="utf-8") as file:
         file.write(decrypted_text)

@@ -1,7 +1,13 @@
+# (PASTE START)
+
 import os
+from typing import Optional, Union, TypeAlias
 
+TokenValue: TypeAlias = Optional[Union[float, str]]
+Token: TypeAlias = tuple[str, TokenValue]
+Node: TypeAlias = Union[float, tuple, str]
 
-# *****TOKENIZER*****
+# TOKENIZER
 def tokenize(expr: str):
     tokens = []
     i = 0
@@ -14,13 +20,26 @@ def tokenize(expr: str):
             i += 1
             continue
 
-        if ch.isdigit():
-            num = ch
-            i += 1
+        if ch.isdigit() or ch == ".":
+            start = i
+            dot_count = 0
+
             while i < n and (expr[i].isdigit() or expr[i] == "."):
-                num += expr[i]
+                if expr[i] == ".":
+                    dot_count += 1
                 i += 1
-            tokens.append(("NUM", float(num)))
+
+            text = expr[start:i]
+
+            if text == "." or dot_count > 1:
+                return "ERROR"
+
+            try:
+                value = float(text)
+            except ValueError:
+                return "ERROR"
+
+            tokens.append(("NUM", value))
             continue
 
         if ch in "+-*/":
@@ -44,96 +63,154 @@ def tokenize(expr: str):
     return tokens
 
 
-# *****PARSER (Recursive Descent)*****
+# PARSER
 class Parser:
     def __init__(self, tokens):
         self.tokens = tokens
         self.pos = 0
 
     def peek(self):
-        return self.tokens[self.pos]
+        if self.pos < len(self.tokens):
+            return self.tokens[self.pos]
+        return ("END", None)
 
     def consume(self):
-        tok = self.tokens[self.pos]
+        tok = self.peek()
         self.pos += 1
         return tok
-    
-    def parse_expression(self): # expression -> term ((+|-) term)*
-        node = self.parse_term()
 
-        while self.peek()[0] == "OP" and self.peek()[1] in "+-":
-            op = self.consume()[1]
-
-            if self.peek()[0] == "OP": # ERROR if two operators in a row
-                return "ERROR"
-            right = self.parse_term()
-            node = (op, node, right)
-
-        return node
-
-    def parse_term(self): # term -> factor ((*|/) factor)*
-        node = self.parse_factor()
-
-        while self.peek()[0] == "OP" and self.peek()[1] in "*/":
-            op = self.consume()[1]
-            right = self.parse_factor()
-            node = (op, node, right)
-
-        return node
-
-    def parse_factor(self): # factor -> -factor | number | (expression)
-        tok = self.peek()
-
-        if tok[0] == "OP" and tok[1] == "+": # UNARY PLUS (NOT ALLOWED)
+    def parse(self):
+        node = self.parse_expression()
+        if node == "ERROR":
             return "ERROR"
-    
-        if tok[0] == "OP" and tok[1] == "-": # UNARY MINUS
+        if self.peek()[0] != "END":
+            return "ERROR"
+        return node
+
+    def parse_expression(self):
+        node = self.parse_term()
+        if node == "ERROR":
+            return "ERROR"
+
+        tok_type, tok_value = self.peek()
+        while tok_type == "OP" and isinstance(tok_value, str) and tok_value in "+-":
+            op = self.consume()[1]
+            right = self.parse_term()
+            if right == "ERROR":
+                return "ERROR"
+            node = (op, node, right)
+            tok_type, tok_value = self.peek()
+
+        return node
+
+    def parse_term(self):
+        node = self.parse_implicit()
+        if node == "ERROR":
+            return "ERROR"
+
+        tok_type, tok_value = self.peek()
+        while tok_type == "OP" and isinstance(tok_value, str) and tok_value in "*/":
+            op = self.consume()[1]
+            right = self.parse_implicit()
+            if right == "ERROR":
+                return "ERROR"
+            node = (op, node, right)
+            tok_type, tok_value = self.peek()
+
+        return node
+
+    def parse_implicit(self):
+        node = self.parse_unary()
+        if node == "ERROR":
+            return "ERROR"
+
+        while self._starts_implicit_factor(self.peek()):
+            right = self.parse_unary()
+            if right == "ERROR":
+                return "ERROR"
+            node = ("*", node, right)
+
+        return node
+
+    def parse_unary(self):
+        tok_type, tok_value = self.peek()
+
+        if tok_type == "OP" and tok_value == "+":
+            return "ERROR"
+
+        if tok_type == "OP" and tok_value == "-":
             self.consume()
-            return ("neg", self.parse_factor())
+            child = self.parse_unary()
+            if child == "ERROR":
+                return "ERROR"
+            return ("neg", child)
 
-        if tok[0] == "NUM": # NUMBER
-            value = tok[1]
+        return self.parse_primary()
+
+    def parse_primary(self):
+        tok_type, tok_value = self.peek()
+
+        if tok_type == "NUM":
+            if not isinstance(tok_value, float):
+                return "ERROR"
             self.consume()
+            return tok_value
 
-        
-            if self.peek()[0] == "LPAREN": # check implicit multiplication like 2(3+4)
-                right = self.parse_factor()
-                return ("*", value, right)
-
-            return value
-
-        if tok[0] == "LPAREN": # PARENTHESES
+        if tok_type == "LPAREN":
             self.consume()
             node = self.parse_expression()
-            if self.peek()[0] == "RPAREN":
-                self.consume()
-                return node
-            return "ERROR"
+            if node == "ERROR":
+                return "ERROR"
+            if self.peek()[0] != "RPAREN":
+                return "ERROR"
+            self.consume()
+            return node
 
         return "ERROR"
-    
 
-# *****TREE FORMAT*****
+    @staticmethod
+    def _starts_implicit_factor(tok):
+        tok_type, _ = tok
+        return tok_type == "NUM" or tok_type == "LPAREN"
+
+
+# FORMAT
+def format_number(v):
+    return str(int(v)) if v.is_integer() else str(v)
+
+
 def tree_to_str(node):
     if node == "ERROR":
         return "ERROR"
-
     if isinstance(node, float):
-        if node.is_integer():
-            return str(int(node))
-        return str(node)
-
+        return format_number(node)
     if isinstance(node, tuple):
         if node[0] == "neg":
             return f"(neg {tree_to_str(node[1])})"
-
-        op, left, right = node
-        return f"({op} {tree_to_str(left)} {tree_to_str(right)})"
-
+        return f"({node[0]} {tree_to_str(node[1])} {tree_to_str(node[2])})"
     return "ERROR"
 
 
-# *****EVALUATION*****
+def tokens_to_str(tokens):
+    if tokens == "ERROR":
+        return "ERROR"
+
+    out = []
+    for t, v in tokens:
+        if t == "END":
+            out.append("[END]")
+        elif t == "NUM":
+            out.append(f"[NUM:{format_number(v)}]")
+        elif t == "OP":
+            out.append(f"[OP:{v}]")
+        elif t == "LPAREN":
+            out.append("[LPAREN:(]")
+        elif t == "RPAREN":
+            out.append("[RPAREN:)]")
+    return " ".join(out)
+
+
+# EVAL
 def evaluate_node(node):
     if node == "ERROR":
         return "ERROR"
@@ -144,45 +221,53 @@ def evaluate_node(node):
     if isinstance(node, tuple):
         if node[0] == "neg":
             val = evaluate_node(node[1])
-            if val == "ERROR":
+            if not isinstance(val, float):
                 return "ERROR"
             return -val
 
-        op, left, right = node
-        l = evaluate_node(left)
-        r = evaluate_node(right)
+        op, l, r = node
+        lv = evaluate_node(l)
+        rv = evaluate_node(r)
 
-        if l == "ERROR" or r == "ERROR":
+        if not isinstance(lv, float) or not isinstance(rv, float):
             return "ERROR"
 
-        if op == "+":
-            return l + r
-        if op == "-":
-            return l - r
-        if op == "*":
-            return l * r
+        if op == "+": return lv + rv
+        if op == "-": return lv - rv
+        if op == "*": return lv * rv
         if op == "/":
-            if r == 0:
-                return "ERROR"
-            return l / r
+            if rv == 0: return "ERROR"
+            return lv / rv
 
     return "ERROR"
 
 
+def format_result(r):
+    if r == "ERROR":
+        return "ERROR"
+    return int(r) if isinstance(r, float) and r.is_integer() else round(r, 4)
 
-# *****MAIN FUNCTION*****
-def evaluate_file(input_path: str) -> list[dict]:
+
+# MAIN FILE PROCESS
+def evaluate_file(path):
     results = []
 
-    with open(input_path, "r") as f:
-        lines = f.readlines()
+    # ✅ Check if file exists FIRST
+    if not os.path.exists(path):
+        print(f"❌ Error: File '{path}' not found.")
+        return []
+
+    # ✅ Safe file opening
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+    except OSError as e:
+        print(f"❌ Error reading file: {e}")
+        return []
 
     for line in lines:
         expr = line.strip()
-
-        tokens = tokenize(expr)
-
-        if tokens == "ERROR":
+        if expr == "":
             results.append({
                 "input": expr,
                 "tree": "ERROR",
@@ -191,46 +276,103 @@ def evaluate_file(input_path: str) -> list[dict]:
             })
             continue
 
-        parser = Parser(tokens)
-        tree = parser.parse_expression()
+        tokens = tokenize(expr)
 
-        tree_str = tree_to_str(tree)
-        result = evaluate_node(tree)
+        if tokens == "ERROR":
+            results.append({"input": expr, "tree": "ERROR", "tokens": "ERROR", "result": "ERROR"})
+            continue
 
-        if result == "ERROR": # format result
-            final_result = "ERROR"
-        else:
-            if isinstance(result, float) and result.is_integer():
-                final_result = int(result)
-            else:
-                final_result = round(result, 4)
+        tree = Parser(tokens).parse()
 
-    
-        token_str = " ".join( # tokens format
-            f"[{t[0]}:{int(t[1]) if isinstance(t[1], float) and t[1].is_integer() else t[1]}]"
-            if t[1] is not None else f"[{t[0]}]"
-            for t in tokens
-        )
+        if tree == "ERROR":
+            results.append({
+                "input": expr,
+                "tree": "ERROR",
+                "tokens": tokens_to_str(tokens),
+                "result": "ERROR"
+            })
+            continue
+
+        value = evaluate_node(tree)
+        final = format_result(value)
 
         results.append({
             "input": expr,
-            "tree": tree_str,
-            "tokens": token_str,
-            "result": final_result
+            "tree": tree_to_str(tree),
+            "tokens": tokens_to_str(tokens),
+            "result": final
         })
 
-    output_path = os.path.join(os.path.dirname(input_path), "output.txt") # For output.txt
-
-    with open(output_path, "w") as out:
-        for res in results:
-            out.write(f"Input: {res['input']}\n")
-            out.write(f"Tree: {res['tree']}\n")
-            out.write(f"Tokens: {res['tokens']}\n")
-            out.write(f"Result: {res['result']}\n\n")
+    # ✅ Safe output writing
+    try:
+        with open("output.txt", "w", encoding="utf-8") as f:
+            for i, r in enumerate(results):
+                f.write(f"Input: {r['input']}\n")
+                f.write(f"Tree: {r['tree']}\n")
+                f.write(f"Tokens: {r['tokens']}\n")
+                f.write(f"Result: {r['result']}\n")
+                if i != len(results) - 1:
+                    f.write("\n")
+    except OSError as e:
+        print(f"❌ Error writing output file: {e}")
 
     return results
 
 
-# *****RUN*****
 if __name__ == "__main__":
-    evaluate_file("input.txt")
+    file_name = "input.txt"
+
+    # ✅ Case 1: File does NOT exist
+    if not os.path.exists(file_name):
+        print("⚠️ input.txt not found. Creating a new file.")
+
+        expressions = []
+        print("Enter expressions (type 'exit' to stop):")
+
+        while True:
+            line = input("> ")
+            if line.lower() == "exit":
+                break
+            expressions.append(line)
+
+        if not expressions:
+            print("No input provided. Program exiting.")
+            exit()
+
+        # create file
+        with open(file_name, "w", encoding="utf-8") as f:
+            for expr in expressions:
+                f.write(expr + "\n")
+
+        print("✅ input.txt created.")
+
+    # ✅ Case 2: File exists
+    else:
+        print("📄 input.txt already exists.")
+        choice = input("Do you want to update it? (y/n): ").lower()
+
+        if choice == "y":
+            expressions = []
+            print("Enter new expressions (type 'exit' to stop):")
+
+            while True:
+                line = input("> ")
+                if line.lower() == "exit":
+                    break
+                expressions.append(line)
+
+            if not expressions:
+                print("No input provided. Keeping existing file.")
+            else:
+                with open(file_name, "w", encoding="utf-8") as f:
+                    for expr in expressions:
+                        f.write(expr + "\n")
+
+                print("✅ input.txt updated.")
+
+        else:
+            print("Using existing input.txt.")
+
+    # ✅ Run evaluation
+    evaluate_file(file_name)
+    print("✅ Output written to output.txt")

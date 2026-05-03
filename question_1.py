@@ -168,5 +168,5 @@ def main():
     verify_decryption()
 
 
-# Run the program
+# Run the main
 main()
